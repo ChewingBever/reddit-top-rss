@@ -114,7 +114,10 @@ foreach($jsonFeedFileItems as $item) {
 		if($item["data"]["domain"]) {
 			$itemTitle .= " (" . $item["data"]["domain"] . ")";
 		}
-		if(strpos($itemDataUrl,"imgur") !== false && strpos($itemDataUrl,"gallery") !== false) {
+		if (
+			(strpos($itemDataUrl,"imgur") !== false && strpos($itemDataUrl,"gallery") !== false) ||
+			strpos($item["data"]["url"], "www.reddit.com/gallery/")
+		) {
 			$itemTitle .= " (Gallery)";
 		}
 		$titleNode = $itemNode->appendChild($xml->createElement("title", $itemTitle));
@@ -181,9 +184,28 @@ foreach($jsonFeedFileItems as $item) {
 
 			// Reddit videos
 			case $item["data"]["domain"] == "v.redd.it":
-				$mediaEmbed = "<video src='" . $item["data"]["secure_media"]["reddit_video"]["fallback_url"] . "' controls='true' preload='auto' autoplay='false' muted='muted' loop='loop' webkit-playsinline='' style='max-width: 90vw;'></video>";
+				$mediaEmbed = "<iframe src='https://www.redditmedia.com" . $item["data"]["permalink"] . "?ref_source=embed&amp;ref=share&amp;embed=true&amp;theme=dark' sandbox='allow-scripts allow-same-origin allow-popups' style='border: none; min-height: 90% !important; overflow: scroll; width: 90% !important;' width='300' height='800' scrolling='yes'></iframe>";
+				if(isset($item["data"]["thumbnail"])) {
+					$mediaEmbed .= "<p><img src='" . $item["data"]["thumbnail"] . "' /></p>";
+				}
 				$itemDescription .= $mediaEmbed;
 			break;
+
+			// Reddit galleries
+			case strpos($item["data"]["url"], "www.reddit.com/gallery/"):
+				$jsonGalleryURL = str_replace("www.reddit.com/gallery/", "www.reddit.com/comments/", $item["data"]["url"]) . '.json';
+				$jsonGalleryFileName = str_replace("https://www.reddit.com/comments/", "", $jsonGalleryURL);
+				$jsonGalleryFile = getFile($jsonGalleryURL, "redditJSON", "cache/reddit/$jsonGalleryFileName", 60 * 5);
+				$jsonGalleryFileParsed = json_decode($jsonGalleryFile, true);
+				$jsonGalleryFileItems = $jsonGalleryFileParsed[0]["data"]["children"][0]["data"]["media_metadata"];
+				$mediaEmbed = "";
+				foreach ($jsonGalleryFileItems as $image) :
+					$previewImageURL = str_replace("preview.redd.it", "i.redd.it", $image["p"]["3"]["u"]);
+					$fullImageURL = str_replace("preview.redd.it", "i.redd.it", $image["s"]["u"]);
+					$mediaEmbed .= "<p><a href='" . $fullImageURL . "'><img src='" . $previewImageURL . "'></a></p>";
+				endforeach;
+				$itemDescription .= $mediaEmbed;
+				break;
 
 			// Reddit images
 			case $item["data"]["domain"] == "i.redd.it":
